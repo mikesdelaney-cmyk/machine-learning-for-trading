@@ -522,6 +522,7 @@ def create_alpaca_engine(strategy):
         symbols=SYMBOLS,
         data_type="bars",
         feed="iex",
+        experimental=True,
     )
     engine = LiveEngine(strategy=strategy, broker=safe_broker, feed=feed)
     # Alpaca SDK retries aggressively under nest_asyncio; quiet the retry logs.

@@ -2,9 +2,6 @@ version = 1
 revision = 3
 requires-python = "==3.14.*"
 
-[options]
-prerelease-mode = "if-necessary"
-
 [manifest]
 overrides = [{ name = "protobuf", specifier = ">=5.0" }]
 
@@ -4333,7 +4330,7 @@ requires-dist = [
     { name = "llama-index-vector-stores-chroma", specifier = ">=0.5.5" },
     { name = "matplotlib", specifier = ">=3.8" },
     { name = "ml4t-backtest", specifier = ">=0.1.3" },
-    { name = "ml4t-data", specifier = ">=0.1.2" },
+    { name = "ml4t-data", git = "https://github.com/mikesdelaney-cmyk/data?rev=ce0e7e8b5c3b6978690e211a1dad08d3f73944d9" },
     { name = "ml4t-diagnostic", specifier = ">=0.1.2" },
     { name = "ml4t-engineer", specifier = ">=0.1.3" },
     { name = "ml4t-live", specifier = ">=0.1.0" },
@@ -4435,8 +4432,8 @@ wheels = [
 
 [[package]]
 name = "ml4t-data"
-version = "0.1.2"
-source = { registry = "https://pypi.org/simple" }
+version = "0.1.dev131+gce0e7e8b5"
+source = { git = "https://github.com/mikesdelaney-cmyk/data?rev=ce0e7e8b5c3b6978690e211a1dad08d3f73944d9#ce0e7e8b5c3b6978690e211a1dad08d3f73944d9" }
 dependencies = [
     { name = "aiofiles" },
     { name = "click" },
@@ -4456,10 +4453,6 @@ dependencies = [
     { name = "rich" },
     { name = "structlog" },
     { name = "tenacity" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/fa/3a/e49c4512f0ef3f4834959ecfe36de7ee17354c406258cc26b9232043c8b4/ml4t_data-0.1.2.tar.gz", hash = "sha256:f35b134435c61f5a686bf8837225ff83079bcf01106ffd2df19cda8da215d541", size = 770903, upload-time = "2026-08-10T16:41:18.543Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/16/96/15a92fc69ec6ffbeaa470bcf1870ec32576969782725e381c26b84417842/ml4t_data-0.1.2-py3-none-any.whl", hash = "sha256:773dae5b8446e41904c36568d8cc5e6910b0be1a0390918a57e4197b1523aff6", size = 488360, upload-time = "2026-08-10T16:41:16.869Z" },
 ]
 
 [[package]]
@@ -4634,7 +4627,7 @@ name = "mlx"
 version = "0.31.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "mlx-metal", marker = "sys_platform == 'darwin'" },
+    { name = "mlx-metal" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8b/f5/e63f6a9316ded2d14a8ebc7a9ca25734c784e8c54d064a78b4dceeacec0e/mlx-0.31.2-cp314-cp314-macosx_14_0_arm64.whl", hash = "sha256:a13c9ce23c3deef6aa5a09315e7953e1a5dc311e851fa16fc74c81fb2509c0b9", size = 588417, upload-time = "2026-04-22T03:14:54.094Z" },

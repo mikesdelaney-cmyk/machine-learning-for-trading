@@ -334,3 +334,6 @@ addopts = "-v --tb=short -p no:torchtyping"
 markers = [
     "production_extract: asserts an absolute property of the full production dataset (a name count, a surplus), which no CI checkout carries - the test-data extract is reduced by design. Runs locally against the real data; deselected in CI.",
 ]
+
+[tool.uv.sources]
+ml4t-data = { git = "https://github.com/mikesdelaney-cmyk/data", rev = "ce0e7e8b5c3b6978690e211a1dad08d3f73944d9" }
