@@ -25,12 +25,12 @@
 # 1. Connecting to Alpaca paper trading account
 # 2. Querying account information and positions
 # 3. Real-time data feed with bar/quote/trade streaming
-# 4. Safe order submission in shadow mode
+# 4. Safe Alpaca paper submission with isolated shadow-mode order examples
 # 5. Strategy execution with ETF momentum signals
 #
 # **Learning Objectives**
 # - Verify the environment, SDK, and account state before connecting a strategy to a live broker.
-# - See how the same backtest strategy is wrapped with shadow-mode risk controls for production use.
+# - See how the same backtest strategy is wrapped with explicit paper-mode risk controls.
 # - Compare the optional live-feed wiring with the default offline simulation path.
 #
 # **Prerequisites**:
@@ -42,10 +42,10 @@
 #
 # **Data Contract**:
 # - **Input**: Deterministic simulated bars by default; Alpaca bars after explicit opt-in
-# - **Output**: Virtual portfolio state, signals, order logs
+# - **Output**: Alpaca paper account state, signals, and isolated shadow order examples
 
 # %% papermill={"duration": 3.438989, "end_time": "2026-06-14T17:08:08.613240+00:00", "exception": false, "start_time": "2026-06-14T17:08:05.174251+00:00", "status": "completed"}
-"""Connect ml4t strategies to Alpaca with shadow-mode risk controls."""
+"""Connect ml4t strategies to Alpaca with explicit paper and shadow risk controls."""
 
 import asyncio
 import logging
@@ -360,19 +360,25 @@ def signals_to_frame(signals: list[dict]) -> pl.DataFrame:
 # ## 4. Safe Broker Configuration
 #
 # Before going live, we wrap the broker with `SafeBroker` which provides:
-# - Shadow mode (virtual orders only)
+# - Explicit PAPER and SHADOW execution modes
 # - Position limits
 # - Order rate limiting
 # - Kill switch
 
 
 # %% papermill={"duration": 0.00441, "end_time": "2026-06-14T17:08:08.957971+00:00", "exception": false, "start_time": "2026-06-14T17:08:08.953561+00:00", "status": "completed"}
-def create_safe_broker(underlying_broker):
-    """Create SafeBroker with risk configuration."""
-    risk_state_path = get_output_dir(25, "alpaca_paper_demo") / "risk_state_paper.json"
+def create_safe_broker(underlying_broker, mode):
+    """Create a SafeBroker for an explicitly selected PAPER or SHADOW path."""
+    if mode not in {"paper", "shadow"}:
+        raise ValueError("mode must be 'paper' or 'shadow'")
+
+    state_filename = (
+        "risk_state_paper.json" if mode == "paper" else "risk_state_order_demo_shadow.json"
+    )
+    risk_state_path = get_output_dir(25, "alpaca_paper_demo") / state_filename
     risk_config = LiveRiskConfig(
-        shadow_mode=False,  # Submit orders to the Alpaca PAPER account
-        execution_mode="paper",
+        shadow_mode=mode == "shadow",
+        execution_mode=mode,
         max_position_value=50_000.0,
         max_order_value=10_000.0,
         max_orders_per_minute=10,
@@ -383,9 +389,15 @@ def create_safe_broker(underlying_broker):
     safe_broker = SafeBroker(underlying_broker, risk_config)
 
     print("\n" + "=" * 60)
-    print("RISK CONFIGURATION (SHADOW MODE)")
+    if mode == "paper":
+        print("RISK CONFIGURATION (ALPACA PAPER MODE)")
+    else:
+        print("RISK CONFIGURATION (SHADOW MODE)")
     print("=" * 60)
-    print("   Shadow Mode: ENABLED (no real orders)")
+    if mode == "paper":
+        print("   Execution Mode: PAPER (orders may be submitted to Alpaca paper account)")
+    else:
+        print("   Execution Mode: SHADOW (virtual orders only; no Alpaca orders)")
     print(f"   Max Position Value: ${risk_config.max_position_value:,.0f}")
     print(f"   Max Order Value: ${risk_config.max_order_value:,.0f}")
     print(f"   Rate Limit: {risk_config.max_orders_per_minute}/minute")
@@ -395,7 +407,7 @@ def create_safe_broker(underlying_broker):
 
 
 # %% [markdown] papermill={"duration": 0.00141, "end_time": "2026-06-14T17:08:08.960841+00:00", "exception": false, "start_time": "2026-06-14T17:08:08.959431+00:00", "status": "completed"}
-# **Finding**: The risk-configuration printout makes shadow mode and exposure limits visible before the live
+# **Finding**: The risk-configuration printout makes the selected execution mode and exposure limits visible before the live
 # feed starts emitting data.
 #
 # **Trading implication**: Broker wrappers should surface their active limits explicitly because a live
@@ -520,7 +532,7 @@ class MockBroker:
 # %% papermill={"duration": 0.00409, "end_time": "2026-06-14T17:08:08.982331+00:00", "exception": false, "start_time": "2026-06-14T17:08:08.978241+00:00", "status": "completed"}
 def create_alpaca_engine(strategy):
     """Build the AlpacaDataFeed, SafeBroker, and LiveEngine wiring."""
-    safe_broker, _ = create_safe_broker(broker)
+    safe_broker, _ = create_safe_broker(broker, "paper")
     feed = AlpacaDataFeed(
         api_key=ALPACA_API_KEY,
         secret_key=ALPACA_SECRET_KEY,
@@ -554,16 +566,26 @@ async def run_engine_for_duration(engine, duration_s: int):
 
 
 # %% papermill={"duration": 0.004271, "end_time": "2026-06-14T17:08:08.993566+00:00", "exception": false, "start_time": "2026-06-14T17:08:08.989295+00:00", "status": "completed"}
-def display_engine_results(strategy, safe_broker, feed, engine):
+async def display_engine_results(strategy, safe_broker, feed, engine):
     """Print engine stats and render the strategy's signal log as a Polars frame."""
     print("Engine stats:", {k: engine.stats[k] for k in list(engine.stats)[:6]})
     print("Feed stats: ", {k: feed.stats[k] for k in list(feed.stats)[:6]})
 
-    vp = safe_broker._virtual_portfolio
-    print(f"Virtual Portfolio cash: ${vp.cash:,.2f}")
-    for symbol, pos in vp.positions.items():
-        value = pos.quantity * (pos.current_price or pos.entry_price)
-        print(f"   {symbol}: {pos.quantity} shares @ ${pos.entry_price:.2f} = ${value:,.2f}")
+    try:
+        account_value = await safe_broker.get_account_value_async()
+        cash = await safe_broker.get_cash_async()
+        positions = safe_broker.positions
+    except Exception as error:
+        print(
+            "WARNING: Alpaca paper account summary unavailable after engine completion "
+            f"({type(error).__name__})"
+        )
+    else:
+        print(f"Alpaca paper account value: ${account_value:,.2f}")
+        print(f"Alpaca paper account cash: ${cash:,.2f}")
+        for symbol, pos in positions.items():
+            value = pos.quantity * (pos.current_price or pos.entry_price)
+            print(f"   {symbol}: {pos.quantity} shares @ ${pos.entry_price:.2f} = ${value:,.2f}")
 
     print(f"\nSignals: {len(strategy.signals)}")
     return signals_to_frame(strategy.signals)
@@ -578,7 +600,7 @@ async def run_live_demo_with_feed():
     if not HAS_CREDENTIALS or broker is None:
         raise RuntimeError("LIVE_FEED requires the Alpaca SDK and paper credentials")
 
-    print("LIVE TRADING DEMO (Shadow Mode)")
+    print("LIVE TRADING DEMO (Alpaca Paper Mode)")
     strategy = ETFMomentumStrategy(lookback=5, threshold=0.02, position_size=10)
     engine, safe_broker, feed = create_alpaca_engine(strategy)
     print(f"Starting live engine for {DEMO_DURATION_SECONDS}s; watching {', '.join(SYMBOLS)}")
@@ -587,7 +609,7 @@ async def run_live_demo_with_feed():
         await run_engine_for_duration(engine, DEMO_DURATION_SECONDS)
     finally:
         feed.stop()
-    return display_engine_results(strategy, safe_broker, feed, engine), pl.DataFrame()
+    return await display_engine_results(strategy, safe_broker, feed, engine), pl.DataFrame()
 
 
 # %% papermill={"duration": 0.005144, "end_time": "2026-06-14T17:08:09.006117+00:00", "exception": false, "start_time": "2026-06-14T17:08:09.000973+00:00", "status": "completed"}
@@ -643,8 +665,8 @@ async def run_simulated_demo() -> tuple[pl.DataFrame, pl.DataFrame]:
 
 
 # %% papermill={"duration": 0.008403, "end_time": "2026-06-14T17:08:09.016034+00:00", "exception": false, "start_time": "2026-06-14T17:08:09.007631+00:00", "status": "completed"}
-# Run the demo interactively using Jupyter's native event loop
-demo_signal_log, demo_order_log = await run_live_demo_with_feed()
+# Run the demo through the shared async helper in notebooks and exported Python.
+demo_signal_log, demo_order_log = run_async(run_live_demo_with_feed())
 demo_signal_log
 
 # %%
@@ -684,7 +706,7 @@ async def demonstrate_order_types():
     print("ORDER TYPE DEMONSTRATIONS (Shadow Mode)")
     print("=" * 60)
 
-    safe_broker, _ = create_safe_broker(broker)
+    safe_broker, _ = create_safe_broker(broker, "shadow")
 
     from ml4t.backtest.types import OrderType
 
@@ -754,7 +776,7 @@ if broker is not None:
 # 2. **Connection**: Paper trading account access
 # 3. **Account Info**: Query equity, cash, positions
 # 4. **Real-Time Feed**: Subscribe to bars/quotes/trades
-# 5. **Safe Trading**: Use SafeBroker in shadow mode
+# 5. **Safe Trading**: Use SafeBroker in Alpaca paper mode
 # 6. **Order Types**: Market, limit, stop orders
 #
 # ### Alpaca vs IB Comparison
@@ -786,9 +808,9 @@ print("ALPACA PAPER TRADING DEMO COMPLETE")
 print("=" * 60)
 print(f"Symbols: {', '.join(SYMBOLS)}")
 print(f"Paper Trading: {'YES' if PAPER_TRADING else 'NO'}")
-shadow_mode_state = "ENABLED" if LIVE_FEED else "NOT ACTIVE (offline simulation)"
-print(f"Shadow Mode: {shadow_mode_state}")
-execution_mode = "Alpaca shadow feed" if LIVE_FEED else "offline simulation"
+shadow_mode_state = "ORDER DEMO ONLY" if LIVE_FEED else "NOT ACTIVE (offline simulation)"
+print(f"Educational Shadow Mode: {shadow_mode_state}")
+execution_mode = "Alpaca paper feed" if LIVE_FEED else "offline simulation"
 print(f"Execution Mode: {execution_mode}")
 print("The same ETFMomentumStrategy interface drives the selected execution path.")
 
