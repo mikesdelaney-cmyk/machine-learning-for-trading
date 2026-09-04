@@ -461,6 +461,10 @@ def create_safe_broker(underlying_broker, mode, state_scope):
         max_order_value=10_000.0,
         max_orders_per_minute=10,
         dedup_window_seconds=1.0 if mode == "paper" else 0.0,
+        # On a PAPER mismatch, inspect Alpaca positions/orders read-only, compare the
+        # persisted snapshot, and reconcile only after finding the cause. Never delete
+        # the state file merely to bypass the startup block.
+        fail_on_reconciliation_mismatch=mode == "paper",
         state_file=str(risk_state_path),
     )
 
