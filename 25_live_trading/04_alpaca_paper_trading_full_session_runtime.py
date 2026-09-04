@@ -88,6 +88,32 @@ if HAS_ALPACA_SDK:
 else:
     print("Alpaca SDK not installed (uv add alpaca-py); running simulation only")
 
+
+if HAS_ALPACA_SDK:
+
+    class PaperReportingAlpacaBroker(AlpacaBroker):
+        """Capture a best-effort PAPER account summary before provider cleanup."""
+
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.paper_account_summary = None
+            self.paper_account_summary_error = None
+
+        async def disconnect(self):
+            """Capture account state once, then always run the normal disconnect."""
+            try:
+                if self.paper_account_summary is None and self.paper_account_summary_error is None:
+                    self.paper_account_summary = (
+                        await self.get_account_value_async(),
+                        await self.get_cash_async(),
+                        self.positions,
+                    )
+            except Exception as error:
+                self.paper_account_summary_error = type(error).__name__
+            finally:
+                await super().disconnect()
+
+
 # %% papermill={"duration": 0.004675, "end_time": "2026-06-14T17:08:08.619490+00:00", "exception": false, "start_time": "2026-06-14T17:08:08.614815+00:00", "status": "completed"} tags=["parameters"]
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -196,7 +222,7 @@ def get_alpaca_account_snapshot():
     account = trading_client.get_account()
     raw_positions = trading_client.get_all_positions()
 
-    broker = AlpacaBroker(
+    broker = PaperReportingAlpacaBroker(
         api_key=ALPACA_API_KEY,
         secret_key=ALPACA_SECRET_KEY,
         paper=PAPER_TRADING,
@@ -552,7 +578,7 @@ def create_alpaca_engine(strategy):
         "websockets",
     ]:
         logging.getLogger(name).setLevel(logging.CRITICAL)
-    return engine, safe_broker, feed
+    return engine, feed, broker
 
 
 # %% papermill={"duration": 0.003989, "end_time": "2026-06-14T17:08:08.987792+00:00", "exception": false, "start_time": "2026-06-14T17:08:08.983803+00:00", "status": "completed"}
@@ -566,21 +592,20 @@ async def run_engine_for_duration(engine, duration_s: int):
 
 
 # %% papermill={"duration": 0.004271, "end_time": "2026-06-14T17:08:08.993566+00:00", "exception": false, "start_time": "2026-06-14T17:08:08.989295+00:00", "status": "completed"}
-async def display_engine_results(strategy, safe_broker, feed, engine):
+def display_engine_results(strategy, paper_broker, feed, engine):
     """Print engine stats and render the strategy's signal log as a Polars frame."""
     print("Engine stats:", {k: engine.stats[k] for k in list(engine.stats)[:6]})
     print("Feed stats: ", {k: feed.stats[k] for k in list(feed.stats)[:6]})
 
-    try:
-        account_value = await safe_broker.get_account_value_async()
-        cash = await safe_broker.get_cash_async()
-        positions = safe_broker.positions
-    except Exception as error:
+    summary = paper_broker.paper_account_summary
+    if summary is None:
+        error_name = paper_broker.paper_account_summary_error or "not captured"
         print(
-            "WARNING: Alpaca paper account summary unavailable after engine completion "
-            f"({type(error).__name__})"
+            "WARNING: Alpaca paper account summary unavailable before broker cleanup "
+            f"({error_name})"
         )
     else:
+        account_value, cash, positions = summary
         print(f"Alpaca paper account value: ${account_value:,.2f}")
         print(f"Alpaca paper account cash: ${cash:,.2f}")
         for symbol, pos in positions.items():
@@ -602,14 +627,22 @@ async def run_live_demo_with_feed():
 
     print("LIVE TRADING DEMO (Alpaca Paper Mode)")
     strategy = ETFMomentumStrategy(lookback=5, threshold=0.02, position_size=10)
-    engine, safe_broker, feed = create_alpaca_engine(strategy)
+    engine, feed, paper_broker = create_alpaca_engine(strategy)
     print(f"Starting live engine for {DEMO_DURATION_SECONDS}s; watching {', '.join(SYMBOLS)}")
 
     try:
         await run_engine_for_duration(engine, DEMO_DURATION_SECONDS)
+    except Exception as error:
+        try:
+            display_engine_results(strategy, paper_broker, feed, engine)
+        except Exception as reporting_error:
+            error.add_note(
+                f"end-of-session reporting also failed: {type(reporting_error).__name__}"
+            )
+        raise
     finally:
         feed.stop()
-    return await display_engine_results(strategy, safe_broker, feed, engine), pl.DataFrame()
+    return display_engine_results(strategy, paper_broker, feed, engine), pl.DataFrame()
 
 
 # %% papermill={"duration": 0.005144, "end_time": "2026-06-14T17:08:09.006117+00:00", "exception": false, "start_time": "2026-06-14T17:08:09.000973+00:00", "status": "completed"}
