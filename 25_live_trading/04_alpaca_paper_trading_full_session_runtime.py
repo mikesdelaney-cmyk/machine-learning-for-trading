@@ -94,24 +94,20 @@ else:
 if HAS_ALPACA_SDK:
 
     class PaperReportingAlpacaBroker(AlpacaBroker):
-        """Capture a best-effort PAPER account summary before provider cleanup."""
+        """Capture cached PAPER positions before provider cleanup."""
 
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
-            self.paper_account_summary = None
-            self.paper_account_summary_error = None
+            self.paper_positions = None
+            self.paper_positions_error = None
 
         async def disconnect(self):
-            """Capture account state once, then always run the normal disconnect."""
+            """Capture local positions once, then always run the normal disconnect."""
             try:
-                if self.paper_account_summary is None and self.paper_account_summary_error is None:
-                    self.paper_account_summary = (
-                        await self.get_account_value_async(),
-                        await self.get_cash_async(),
-                        self.positions,
-                    )
+                if self.paper_positions is None and self.paper_positions_error is None:
+                    self.paper_positions = self.positions
             except Exception as error:
-                self.paper_account_summary_error = type(error).__name__
+                self.paper_positions_error = type(error).__name__
             finally:
                 await super().disconnect()
 
@@ -758,17 +754,17 @@ def display_engine_results(
     print("Feed stats: ", {k: feed.stats[k] for k in list(feed.stats)[:6]})
 
     if mode == "paper":
-        summary = session_broker.paper_account_summary
-        if summary is None:
-            error_name = session_broker.paper_account_summary_error or "not captured"
+        print("Alpaca paper account value: unavailable (teardown REST query omitted)")
+        print("Alpaca paper account cash: unavailable (teardown REST query omitted)")
+        positions = session_broker.paper_positions
+        if positions is None:
+            error_name = session_broker.paper_positions_error or "not captured"
             print(
-                "WARNING: Alpaca paper account summary unavailable before broker cleanup "
+                "WARNING: Alpaca paper cached positions unavailable before broker cleanup "
                 f"({error_name})"
             )
         else:
-            account_value, cash, positions = summary
-            print(f"Alpaca paper account value: ${account_value:,.2f}")
-            print(f"Alpaca paper account cash: ${cash:,.2f}")
+            print("Alpaca paper cached positions captured before broker cleanup:")
             for symbol, pos in positions.items():
                 value = pos.quantity * (pos.current_price or pos.entry_price)
                 print(
