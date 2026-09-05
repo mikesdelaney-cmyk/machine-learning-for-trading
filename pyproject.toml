@@ -337,3 +337,6 @@ markers = [
 
 [tool.uv.sources]
 ml4t-data = { git = "https://github.com/mikesdelaney-cmyk/data", rev = "ce0e7e8b5c3b6978690e211a1dad08d3f73944d9" }
+# Temporary exact pin for the qualified critical Alpaca issue #67 fix, which is
+# not yet in a release. Replace it with the first release preserving this behavior.
+ml4t-live = { git = "https://github.com/ml4t/live.git", rev = "8aa18493d111f03991f2df9c44923f27acc9b03c" }

@@ -174,7 +174,7 @@ wheels = [
 
 [[package]]
 name = "alpaca-py"
-version = "0.43.5"
+version = "0.44.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "msgpack" },
@@ -185,9 +185,9 @@ dependencies = [
     { name = "sseclient-py" },
     { name = "websockets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b8/9c/0d5b0565f31a6a439876cb343282c1b7353f20ff90fefb57d33f94b4e215/alpaca_py-0.43.5.tar.gz", hash = "sha256:7b09ba442cb0c6f957c2c57a30c6035456e2e670e63e383d439c639ffdbf98ba", size = 98289, upload-time = "2026-07-02T07:22:07.016Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/2d/b7/99f09835590f2a3fbdb82abf72d81a199a7aca6d0335a6bc6ec057fc2792/alpaca_py-0.44.0.tar.gz", hash = "sha256:5388715b67b51ad30fa07308e89299d48b19bed65b81013b8a1158fa5837337b", size = 103559, upload-time = "2026-08-11T10:15:05.96Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/02/40/83c7ef8bc3e74e73cda6308f7107fe57815dcfc808dc9cd03bd09aa22dd3/alpaca_py-0.43.5-py3-none-any.whl", hash = "sha256:0b4cac9b743851310f19f6a9aa84f57ddf95ae75b601350395746a893f54a2da", size = 122677, upload-time = "2026-07-02T07:22:08.06Z" },
+    { url = "https://files.pythonhosted.org/packages/8e/9e/69a2d867988578d6f9e52e35d435d8a43296257cf590fb881a3752de7651/alpaca_py-0.44.0-py3-none-any.whl", hash = "sha256:b54673f967c0c814a5e0223cbb0211a5d9d75a8d107e792872b14e5bae957c03", size = 128904, upload-time = "2026-08-11T10:15:07.141Z" },
 ]
 
 [[package]]
@@ -4333,7 +4333,7 @@ requires-dist = [
     { name = "ml4t-data", git = "https://github.com/mikesdelaney-cmyk/data?rev=ce0e7e8b5c3b6978690e211a1dad08d3f73944d9" },
     { name = "ml4t-diagnostic", specifier = ">=0.1.2" },
     { name = "ml4t-engineer", specifier = ">=0.1.3" },
-    { name = "ml4t-live", specifier = ">=0.1.0" },
+    { name = "ml4t-live", git = "https://github.com/ml4t/live.git?rev=8aa18493d111f03991f2df9c44923f27acc9b03c" },
     { name = "ml4t-models", specifier = ">=0.1.2" },
     { name = "mlflow", specifier = ">=3.10.1" },
     { name = "mlflow", marker = "extra == 'mlops'", specifier = ">=2.16" },
@@ -4502,8 +4502,8 @@ wheels = [
 
 [[package]]
 name = "ml4t-live"
-version = "0.1.0"
-source = { registry = "https://pypi.org/simple" }
+version = "0.1.1.dev11+g8aa1849"
+source = { git = "https://github.com/ml4t/live.git?rev=8aa18493d111f03991f2df9c44923f27acc9b03c#8aa18493d111f03991f2df9c44923f27acc9b03c" }
 dependencies = [
     { name = "alpaca-py" },
     { name = "ccxt" },
@@ -4511,10 +4511,6 @@ dependencies = [
     { name = "ib-async" },
     { name = "ml4t-backtest" },
     { name = "ml4t-specs" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/37/b3/a2bfb095294f78bee709dddb261d8cda81cc5584827e4d35af75a88c2b42/ml4t_live-0.1.0.tar.gz", hash = "sha256:3d527dce062441b83668df7e89b127d4db311ea5bd9d6dfaea469a3a0864a3f2", size = 109594, upload-time = "2026-08-10T19:03:37.41Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/8b/27/087001b44f9ef821806d120322f20bf46b4d5a8b5d66cdd58a0ab9c9a776/ml4t_live-0.1.0-py3-none-any.whl", hash = "sha256:0eb873aa1068652bdb6d12e08561c543219c4d63366b2005366bfb03ad0fb4b1", size = 127884, upload-time = "2026-08-10T19:03:35.834Z" },
 ]
 
 [[package]]
