@@ -91,7 +91,15 @@ warnings.filterwarnings("ignore")
 
 import numpy as np
 import polars as pl
-from ml4t.backtest import BacktestConfig, DataFeed, Engine, ExecutionMode, OrderSide, Strategy
+from ml4t.backtest import (
+    BacktestConfig,
+    DataFeed,
+    Engine,
+    ExecutionMode,
+    OrderSide,
+    OrderStatus,
+    Strategy,
+)
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import Ridge
 from sklearn.preprocessing import StandardScaler
@@ -114,6 +122,7 @@ PRIMARY_LABEL = "fwd_ret_21d"
 LIVE_WINDOW_START = "2025-01-01"  # cross-sections from here become "live" predictions
 FORWARD_HORIZON_DAYS = 21  # fwd_ret_21d label horizon (trading days)
 TOP_K = 5
+CASH_BUFFER = 0.02  # leave room for next-bar price movement and commission
 REBALANCE_EVERY_N_DAYS = 21  # match the label horizon
 INITIAL_CASH = 100_000.0
 COMMISSION_RATE = 0.0005
@@ -345,11 +354,13 @@ class CrossSectionalRidgeStrategy(Strategy):
         top_k: int,
         rebalance_every: int,
         symbols: list[str],
+        cash_buffer: float,
     ):
         self.predictions = predictions
         self.top_k = top_k
         self.rebalance_every = rebalance_every
         self.symbols = symbols
+        self.cash_buffer = cash_buffer
         self._bars_seen = 0
         self.signal_log: list[dict] = []
         self.rebalance_log: list[dict] = []
@@ -378,7 +389,7 @@ class CrossSectionalRidgeStrategy(Strategy):
         # Size positions against the broker's current account value rather
         # than INITIAL_CASH so leverage stays constant as PnL accrues across
         # rebalances.
-        account_value = broker.get_account_value()
+        account_value = broker.get_account_value() * (1.0 - self.cash_buffer)
 
         for symbol in self.symbols:
             position = broker.get_position(symbol)
@@ -442,6 +453,7 @@ strategy_backtest = CrossSectionalRidgeStrategy(
     top_k=TOP_K,
     rebalance_every=REBALANCE_EVERY_N_DAYS,
     symbols=ALL_SYMBOLS,
+    cash_buffer=CASH_BUFFER,
 )
 engine_backtest = Engine(
     feed=feed_backtest,
@@ -457,6 +469,31 @@ assert strategy_backtest.rebalance_log, "Offline replay produced no scheduled re
 print(f"Backtest final value: ${backtest_results['final_value']:,.2f}")
 print(f"Backtest total return: {backtest_results['total_return_pct']:.2f}%")
 print(f"Backtest signals: {len(strategy_backtest.signal_log)}")
+
+# A logged signal is not a valid reference order when the broker refused it.
+# NEXT_BAR orders created on the final bar are classified separately because
+# the replay has no subsequent bar on which to fill them.
+last_bar_ts = engine_backtest.equity_curve[-1][0]
+refused, pending_at_end = [], []
+for order in engine_backtest.broker.orders:
+    if order.status is OrderStatus.FILLED:
+        continue
+    if order.status is OrderStatus.PENDING and order.created_at == last_bar_ts:
+        pending_at_end.append(order)
+    else:
+        refused.append(order)
+
+print(f"Offline orders: {len(engine_backtest.broker.orders)}")
+print(f"  filled:              {len(engine_backtest.broker.fills)}")
+print(f"  unfilled at the end: {len(pending_at_end)}")
+print(f"  refused:             {len(refused)}")
+for order in refused[:5]:
+    print(f"    {order.asset} {order.side.value} {order.quantity:g}: {order.rejection_reason}")
+assert not refused, (
+    f"The offline replay did not place the basket it logged: {len(refused)} order(s) refused. "
+    "A refused order means the reference tape and the strategy's own signal log disagree, "
+    "so the reconciliation below would compare an intended basket against one never held."
+)
 
 # %% [markdown]
 # ## 8. Live Submission through Alpaca Paper Equities
