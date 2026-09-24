@@ -3,21 +3,25 @@
 > **Scope:** PAPER trading only. Nothing in this record authorizes live-money
 > trading.
 >
-> **Status (2026-09-24):** runtime 04 is qualified and frozen. Notebook 02 has
-> passed frozen-data and refreshed-data offline dry runs. Its first scheduled
-> PAPER basket remains a future, one-time event. A one-shot agent wake is
-> scheduled for that event; it does not launch the notebook directly.
+> **Status (2026-09-24):** deployment work is complete through runtime-04
+> PAPER qualification and notebook-02 offline qualification. Notebook 02's
+> provider submission path remains untested. A one-shot agent wake is
+> scheduled for 2026-10-07; the first PAPER basket is attempted then only if
+> the fresh `rebalance_log` confirms eligibility and every §7.2 gate passes.
+> The wake performs fresh gates and does not launch the notebook directly.
 
 ## 1. Supported deployment boundary
 
 This deployment qualified two deliberately different Chapter 25 paths:
 
-1. `04_alpaca_paper_trading_full_session_runtime.py` is a supervised,
-   event-driven Alpaca PAPER runtime using `AlpacaDataFeed`, `SafeBroker`, and
-   `LiveEngine`. Its unchanged five-bar ETF momentum strategy was qualified
-   through a full core session, and its existing BUY and SELL branches were
-   exercised in a separate bounded one-share rehearsal. The tracked runtime
-   script is now frozen.
+1. `04_alpaca_paper_trading_full_session_runtime.py` is a deployment-authored,
+   supervised variant of the repository's demo-04 path. It uses
+   `AlpacaDataFeed`, `SafeBroker`, and `LiveEngine` and adds fail-closed
+   reconciliation, full-session lifecycle controls, reporting, and dedicated
+   persistence. Its unchanged five-bar `ETFMomentumStrategy` parameters were
+   qualified through a full core session, and the strategy's existing BUY and
+   SELL branches were exercised in a separate bounded one-share rehearsal.
+   The tracked runtime script is now frozen.
 2. `02_etfs_deployment_loop.ipynb` is a scheduled Ridge/top-five ETF
    deployment notebook. It refreshes the data root named by `ML4T_DATA_PATH`
    (operationally, the separate deployment copy), refits on the fixed pre-live
@@ -43,6 +47,15 @@ repository-supported boundary.
 
 Live-import and installed-source evidence is retained locally in
 `25_live_trading/output/deployment_completion_audit/validations/environment-2026-09-24.md`.
+
+The reviewed installed `AlpacaBroker` source passes its explicit `paper`
+boolean directly to both `TradingClient` and `TradingStream`; it does not read
+an environment variable that can override that argument. Its
+`assert_paper_trading()` method requires the client's paper/sandbox flag and
+Alpaca's official `TRADING_PAPER` base URL. Notebook 02 does not call that
+method, so the future read-only provider preflight must call it after connect
+and independently confirm PAPER account identity before submission. The C4
+packet must include that evidence rather than relying on static inspection.
 
 Qualified source identities:
 
@@ -73,8 +86,17 @@ environment and reinstall the local project before executing. Do not run
   `95a5b1d9`, `8af0c3ae`, `b526ac26`, `0aa223a3`, and `73f88b70`.
 - The branch pins `ml4t-data` to fork commit `ce0e7e8b...` and
   `ml4t-live` to commit `8aa18493...` under `[tool.uv.sources]`.
+- The deployment lock moves `alpaca-py` from the upstream base's `0.43.5` to
+  the qualified `0.44.0`, removes the prerelease-mode option, and
+  includes uv lock-format/marker normalization. No dependency cleanup was
+  attempted after qualification.
 - Runtime 04 explicitly uses `AlpacaDataFeed(..., experimental=True)` and
   `execution_mode="paper"`.
+- Runtime 04 is a deployment-authored variant, not an upstream file that
+  remained byte-for-byte unchanged. "Unchanged" in this record refers only to
+  the qualified `ETFMomentumStrategy` logic and production parameters. The
+  class is copied from demo 04; normalized AST hashes are identical, as
+  recorded in the local deployment audit.
 - A failed SSD/storage path was replaced; the replacement passed the required
   health and durability gates before deployment work resumed.
 - The frozen research data is never refreshed in place. Mutable operation
@@ -96,6 +118,23 @@ verification information and only a required, isolated fix was selected:
   were inspected but not merged wholesale because the qualified local path
   did not require their broader changes.
 
+Other tracked differences also present in the upstream-base diff are not part
+of the supported operator path:
+
+- `./alpaca_latency_diagnostic.sh` is a retained terminal-history diagnostic
+  artifact, not an executable runbook. It has no shebang, contains plain
+  `uv run`, and must not be used for deployment execution.
+- Chapter 6/7 notebook JSON includes non-functional re-save noise (kernel
+  metadata, key ordering, and numeric display serialization). It is unrelated
+  to the Chapter 25 deployment.
+- Demo 04's `.py` and `.ipynb` both add `experimental=True`, but the notebook
+  also uses top-level `await` where the paired Python file retains
+  `run_async(...)`; that demo pair is not synchronized and is not the frozen
+  runtime-04 entry point.
+- Tracked notebook execution-provenance cells predate later source fixes. The
+  qualified Papermill outputs and audit manifests, not those stale embedded
+  provenance values, support the deployment claims.
+
 ## 4. Accepted execution evidence
 
 ### 4.1 A-MIN provider-path validation
@@ -104,15 +143,18 @@ verification information and only a required, isolated fix was selected:
 - One SPY BUY LIMIT/DAY order filled for one share.
 - Provider, adapter, SafeBroker, and persisted views agreed in three
   sequential observations; cleanup completed successfully.
-- The diagnostic share was later sold once through Alpaca PAPER and the
-  provider account ended flat with zero open orders.
+- The diagnostic share was later sold once manually through the Alpaca PAPER
+  web interface as separately authorized housekeeping; it was not a strategy
+  or adapter-generated exit. The provider account ended flat with zero open
+  orders.
 - Evidence is retained under
-  `25_live_trading/output/alpaca_paper_entry_min/`.
+  `25_live_trading/output/alpaca_paper_entry_min/`; the manual closeout record
+  is `manual-exit/exit-evidence-2026-09-11.json` within that directory.
 
 ### 4.2 Runtime 04 full-session qualification
 
-- The unchanged production runtime completed one normal NYSE PAPER session
-  through the core close.
+- The deployment-authored production runtime completed one normal NYSE PAPER
+  session through the core close.
 - It accepted 805 market-data bars.
 - The unchanged `lookback=5`, `threshold=0.02`, `position_size=10` strategy
   emitted no signals or orders, which is a valid strategy outcome.
@@ -327,7 +369,12 @@ Require all of the following before arming:
 
 1. latest data date is the completed scheduled rebalance session;
 2. prediction coverage reaches that date;
-3. replay has no true refusals;
+3. replay has no true refusals; if final-bar `NEXT_BAR` orders are pending,
+   confirm every pending order was created on the final rebalance bar, none is
+   older, and each pending `(symbol, side, quantity)` matches a distinct
+   latest-rebalance entry in `strategy_backtest.signal_log`, with pending
+   count no greater than latest-rebalance signal count; record the full pending
+   disposition in C4 before arming;
 4. target-basket parity passes;
 5. no prior armed attempt exists for that rebalance date;
 6. Alpaca PAPER identity is explicit, account is ACTIVE/unblocked, all
@@ -503,6 +550,20 @@ completeness.
 - The notebook has no built-in one-attempt ledger, so audit history and
   provider order history enforce the one-armed-run rule.
 - The provider submission occurs before the later parity assertion.
+- Notebook 02's direct provider submission path has not yet been exercised;
+  its qualification to date is offline only. The 2026-10-07 wake may perform
+  the first provider-path rehearsal only if the fresh `rebalance_log` confirms
+  eligibility and every §7.2 gate passes.
+- The final-bar `NEXT_BAR` pending exemption in the replay guard was not
+  exercised: both qualified replays had zero pending orders.
+- The production `position_size=10` strategy order was not provider-tested;
+  runtime 04 produced no signals, while the bounded BUY/SELL rehearsal used
+  one share and a test-only `0.0005` threshold.
+- Notebook 02's run record does not currently persist `CASH_BUFFER` or replay
+  disposition counts; the retained executed notebook and audit summaries are
+  required to reproduce those facts.
+- The tracked notebook execution-provenance values predate the final source
+  fixes and must not be used as evidence of the qualified executions.
 - Yahoo adjustment vintages can create an append-boundary return
   discontinuity.
 - FRED macro data is not refreshed by notebook 02 and later ETF rows use the
@@ -514,8 +575,9 @@ completeness.
 - The deployment is not high-availability and does not provide unattended
   recovery from ambiguous orders.
 - A-MIN source/runbook files and all execution evidence remain local and
-  intentionally untracked/ignored; this document is the only primary tracked
-  deployment record.
+  intentionally untracked (and are not ignored); this document is the only
+  primary tracked deployment record. Never use broad staging such as
+  `git add -A` on this branch.
 
 ## 12. Current ordinary next action
 
@@ -525,4 +587,5 @@ Execute the armed notebook at most once only if the notebook itself reports
 eligibility.
 
 Until then, the supported state is: runtime 04 frozen; notebook 02 qualified
-offline; future scheduled PAPER basket pending.
+offline only; provider submission untested; future scheduled PAPER basket
+pending.
