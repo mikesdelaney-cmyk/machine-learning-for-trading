@@ -97,6 +97,11 @@ environment and reinstall the local project before executing. Do not run
   the qualified `ETFMomentumStrategy` logic and production parameters. The
   class is copied from demo 04; normalized AST hashes are identical, as
   recorded in the local deployment audit.
+- The paired tracked runtime-04 notebook has SHA-256
+  `d745f388af112cef1bccd319f192d9387a3b466fbbfe279f47a12806aa36c4ef`.
+  It is not the production entry point, and its embedded Papermill metadata is
+  historical rather than evidence of the accepted full-session execution; the
+  pinned `.py` identity in §4.2 controls deployment execution.
 - A failed SSD/storage path was replaced; the replacement passed the required
   health and durability gates before deployment work resumed.
 - The frozen research data is never refreshed in place. Mutable operation
@@ -372,9 +377,10 @@ Require all of the following before arming:
 3. replay has no true refusals; if final-bar `NEXT_BAR` orders are pending,
    confirm every pending order was created on the final rebalance bar, none is
    older, and each pending `(symbol, side, quantity)` matches a distinct
-   latest-rebalance entry in `strategy_backtest.signal_log`, with pending
-   count no greater than latest-rebalance signal count; record the full pending
-   disposition in C4 before arming;
+   final-rebalance-timestamp entry in `strategy_backtest.signal_log`,
+   interpreting signal quantity as `abs(delta)` and side from the sign of
+   `delta`, with pending count no greater than final-rebalance signal count;
+   record both counts and the full pending disposition in C4 before arming;
 4. target-basket parity passes;
 5. no prior armed attempt exists for that rebalance date;
 6. Alpaca PAPER identity is explicit, account is ACTIVE/unblocked, all
@@ -574,17 +580,17 @@ completeness.
 - No live-money path has been qualified or authorized.
 - The deployment is not high-availability and does not provide unattended
   recovery from ambiguous orders.
-- A-MIN source/runbook files and all execution evidence remain local and
-  intentionally untracked (and are not ignored); this document is the only
-  primary tracked deployment record. Never use broad staging such as
-  `git add -A` on this branch.
+- The three A-MIN source/runbook files remain local and untracked (not ignored),
+  while execution evidence under `25_live_trading/output/` remains local and
+  git-ignored. This document is the only primary tracked deployment record.
+  Never use broad staging such as `git add -A` on this branch.
 
 ## 12. Current ordinary next action
 
 At the scheduled one-time wake on 2026-10-07 at 18:30 ET, run a fresh
 refresh/dry-run, PAPER account preflight, and Claude C4 review.
 Execute the armed notebook at most once only if the notebook itself reports
-eligibility.
+eligibility and every §7.2 gate passes.
 
 Until then, the supported state is: runtime 04 frozen; notebook 02 qualified
 offline only; provider submission untested; future scheduled PAPER basket
